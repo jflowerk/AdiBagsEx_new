@@ -258,19 +258,36 @@ do
 	local UIHider = CreateFrame("Frame")
 	UIHider:Hide()
 
-	local function NOOP() end
+	-- Cache of BankFrame's original state so we can restore it if AdiBagsEx is disabled.
+	-- We avoid hooking BankFrame.Show / BankFrame.Hide directly: replacing secure frame
+	-- methods with insecure wrappers taints any Blizzard code path that touches
+	-- BankFrame (notably UIParentPanelManager.SetUIPanel, which breaks MoneyFrame /
+	-- PaperDollFrame secret-number math in WoW 11.0.5+).
+	local originalBankFrameParent
+	local bankFrameNeutralized = false
+
+	local function NeutralizeBankFrame()
+		if bankFrameNeutralized then return end
+		originalBankFrameParent = BankFrame:GetParent()
+		BankFrame:UnregisterAllEvents()
+		BankFrame:SetParent(UIHider)
+		bankFrameNeutralized = true
+	end
+
+	local function RestoreBankFrame()
+		if not bankFrameNeutralized then return end
+		BankFrame:SetParent(originalBankFrameParent or UIParent)
+		-- Re-register the events that the default BankFrame relies on so that the
+		-- native UI works again if our module is disabled.
+		BankFrame:RegisterEvent("BANKFRAME_OPENED")
+		BankFrame:RegisterEvent("BANKFRAME_CLOSED")
+		bankFrameNeutralized = false
+	end
 
 	function charBank:PostEnable()
 		self:RegisterMessage('AdiBags_InteractingWindowChanged')
 
-		self:RawHookScript(BankFrame, "OnEvent", NOOP, true)
-		self:RawHookScript(BankFrame, "OnShow", NOOP, true)
-		self:RawHookScript(BankFrame, "OnHide", NOOP, true)
-		self:RawHook(BankFrame, "GetRight", "BankFrameGetRight", true)
-		self:Hook(BankFrame, "Show", "Open", true)
-		self:Hook(BankFrame, "Hide", "Close", true)
-
-		BankFrame:SetParent(UIHider)
+		NeutralizeBankFrame()
 
 		if addon:GetInteractingWindow() == "BANKFRAME" then
 			self:Open()
@@ -278,10 +295,7 @@ do
 	end
 
 	function charBank:PostDisable()
-		if addon:GetInteractingWindow() == "BANKFRAME" then
-			self.hooks[BankFrame].Show(BankFrame)
-		end
-		BankFrame:SetParent(UIParent)
+		RestoreBankFrame()
 	end
 
 	function charBank:AdiBags_InteractingWindowChanged(event, new, old)
@@ -297,14 +311,21 @@ do
 	end
 
 	function charBank:PreOpen()
-		self.hooks[BankFrame].Show(BankFrame)
+		-- BankFrame.Show is still Blizzard's original method; calling it keeps the
+		-- frame's shown-state in sync with the UI panel manager while our UIHider
+		-- parent hides it visually.
+		if not BankFrame:IsShown() then
+			BankFrame:Show()
+		end
 		if addon.isRetail and addon.db.profile.autoDeposit and not IsModifierKeyDown() then
 			DepositReagentBank()
 		end
 	end
 
 	function charBank:PostClose()
-		self.hooks[BankFrame].Hide(BankFrame)
+		if BankFrame:IsShown() then
+			BankFrame:Hide()
+		end
 		CloseBankFrame()
 	end
 
@@ -315,10 +336,6 @@ do
 		else
 			SortBankBags()
 		end
-	end
-
-	function charBank:BankFrameGetRight()
-		return 0
 	end
 
 end
