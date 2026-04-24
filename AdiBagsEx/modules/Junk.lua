@@ -86,7 +86,6 @@ function mod:OnEnable()
 	end
 	prefs = self.db.profile
 	self:RegisterMessage('AdiBags_OverrideFilter')
-	self:Hook(addon, 'IsJunk')
 	wipe(cache)
 	addon.RegisterSectionHeaderScript(self, 'OnTooltipUpdate', 'OnTooltipUpdateSectionHeader')
 	addon.RegisterSectionHeaderScript(self, 'OnClick', 'OnClickSectionHeader')
