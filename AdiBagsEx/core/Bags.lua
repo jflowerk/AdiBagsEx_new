@@ -268,6 +268,17 @@ do
 
 	local function NeutralizeBankFrame()
 		if bankFrameNeutralized then return end
+		-- Defensive: clear any stale insecure overrides that older versions of this
+		-- addon (or previous sessions still running in memory after an in-place
+		-- upgrade) may have left on BankFrame. rawget/rawset bypass the metatable so
+		-- after this the method lookup falls through to the secure FrameMixin.
+		if rawget(BankFrame, "Show") then rawset(BankFrame, "Show", nil) end
+		if rawget(BankFrame, "Hide") then rawset(BankFrame, "Hide", nil) end
+		if rawget(BankFrame, "GetRight") then rawset(BankFrame, "GetRight", nil) end
+		BankFrame:SetScript("OnEvent", nil)
+		BankFrame:SetScript("OnShow", nil)
+		BankFrame:SetScript("OnHide", nil)
+
 		originalBankFrameParent = BankFrame:GetParent()
 		BankFrame:UnregisterAllEvents()
 		BankFrame:SetParent(UIHider)
