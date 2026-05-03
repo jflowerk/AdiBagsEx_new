@@ -117,12 +117,11 @@ function buttonProto:OnCreate()
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
 		overlay:EnableMouse(true)
 		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
-		-- Use type="macro" with "/use <ItemName>". The slash-command path
-		-- routes through the same handler the native bag UI uses, so it
-		-- equips gear and sells at a merchant in addition to consuming items.
-		-- type="item" with "<bag> <slot>" or with item name skipped the
-		-- vendor-sell branch in testing.
-		overlay:SetAttribute("type", "macro")
+		-- type="item" with "<bag> <slot>" attribute dispatches through
+		-- UseContainerItem(bag, slot) and handles use + equip from the exact
+		-- slot the user clicked. Vendor-sell is not currently routed through
+		-- this path; that case is a known limitation.
+		overlay:SetAttribute("type", "item")
 		-- Show the tooltip directly via GameTooltip:SetBagItem instead of
 		-- forwarding to the underlying button's OnEnter. The underlying button
 		-- is tainted (we re-parented it), and calling its handler from our
@@ -156,20 +155,11 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	if self.hasItem and self.itemId then
-		local name = self.itemLink and GetItemInfo(self.itemLink) or GetItemInfo(self.itemId)
-		if name then
-			overlay:SetAttribute("macrotext", "/use " .. name)
-			overlay:Show()
-		else
-			-- Item info not cached yet; suppress the overlay so the user is
-			-- not silently using the wrong item, then rely on the next
-			-- FullUpdate (after GET_ITEM_INFO_RECEIVED) to populate this.
-			overlay:SetAttribute("macrotext", nil)
-			overlay:Hide()
-		end
+	if self.hasItem and self.bag and self.slot then
+		overlay:SetAttribute("item", self.bag .. " " .. self.slot)
+		overlay:Show()
 	else
-		overlay:SetAttribute("macrotext", nil)
+		overlay:SetAttribute("item", nil)
 		overlay:Hide()
 	end
 end
@@ -200,7 +190,7 @@ function buttonProto:OnRelease()
 	self.stack = nil
 	self.dirty = false
 	if self.secureUseOverlay and not InCombatLockdown() then
-		self.secureUseOverlay:SetAttribute("macrotext", nil)
+		self.secureUseOverlay:SetAttribute("item", nil)
 		self.secureUseOverlay:Hide()
 		self.secureOverlayPending = nil
 	end
