@@ -113,12 +113,14 @@ function buttonProto:OnCreate()
 	if addon.isRetail then
 		local overlay = CreateFrame("Button", nil, self, "SecureActionButtonTemplate")
 		overlay:SetAllPoints(self)
-		overlay:SetFrameLevel(self:GetFrameLevel() + 5)
-		overlay:RegisterForClicks("RightButtonUp")
-		overlay:SetAttribute("type", "item")
+		overlay:SetFrameStrata("HIGH")
+		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
+		overlay:EnableMouse(true)
+		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
+		-- Use macrotext rather than type="item": "/use <id>" is unambiguous and
+		-- doesn't depend on item-name lookups that may not be cached yet.
+		overlay:SetAttribute("type", "macro")
 		overlay:Hide()
-		overlay:SetScript("OnEnter", function() return self:GetScript("OnEnter") and self:GetScript("OnEnter")(self) end)
-		overlay:SetScript("OnLeave", function() return self:GetScript("OnLeave") and self:GetScript("OnLeave")(self) end)
 		self.secureUseOverlay = overlay
 	end
 
@@ -138,10 +140,10 @@ function buttonProto:UpdateSecureUseOverlay()
 	self.secureOverlayPending = nil
 	local itemId = self.itemId
 	if itemId then
-		overlay:SetAttribute("item", "item:" .. itemId)
+		overlay:SetAttribute("macrotext", "/use item:" .. itemId)
 		overlay:Show()
 	else
-		overlay:SetAttribute("item", nil)
+		overlay:SetAttribute("macrotext", nil)
 		overlay:Hide()
 	end
 end
@@ -172,7 +174,7 @@ function buttonProto:OnRelease()
 	self.stack = nil
 	self.dirty = false
 	if self.secureUseOverlay and not InCombatLockdown() then
-		self.secureUseOverlay:SetAttribute("item", nil)
+		self.secureUseOverlay:SetAttribute("macrotext", nil)
 		self.secureUseOverlay:Hide()
 		self.secureOverlayPending = nil
 	end
