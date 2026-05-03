@@ -117,12 +117,12 @@ function buttonProto:OnCreate()
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
 		overlay:EnableMouse(true)
 		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
-		-- type="item" with "<bag> <slot>" attribute dispatches via the secure
-		-- equivalent of UseContainerItem(bag, slot), which mirrors a native
-		-- right-click: use for consumables, equip for gear, sell at a vendor.
-		-- The macrotext "/use item:<id>" path only ever does "use" and doesn't
-		-- branch into equip/sell, which is why equippable/vendor cases failed.
-		overlay:SetAttribute("type", "item")
+		-- Use type="macro" with "/use <ItemName>". The slash-command path
+		-- routes through the same handler the native bag UI uses, so it
+		-- equips gear and sells at a merchant in addition to consuming items.
+		-- type="item" with "<bag> <slot>" or with item name skipped the
+		-- vendor-sell branch in testing.
+		overlay:SetAttribute("type", "macro")
 		-- Show the tooltip directly via GameTooltip:SetBagItem instead of
 		-- forwarding to the underlying button's OnEnter. The underlying button
 		-- is tainted (we re-parented it), and calling its handler from our
@@ -157,19 +157,19 @@ function buttonProto:UpdateSecureUseOverlay()
 	end
 	self.secureOverlayPending = nil
 	if self.hasItem and self.itemId then
-		-- Prefer item name (resolves through UseItemByName which honours the
-		-- vendor-sell branch). Fall back to "<bag> <slot>" if the name isn't in
-		-- the item cache yet; that path uses UseContainerItem and handles
-		-- use/equip but not vendor sell.
 		local name = self.itemLink and GetItemInfo(self.itemLink) or GetItemInfo(self.itemId)
 		if name then
-			overlay:SetAttribute("item", name)
+			overlay:SetAttribute("macrotext", "/use " .. name)
+			overlay:Show()
 		else
-			overlay:SetAttribute("item", self.bag .. " " .. self.slot)
+			-- Item info not cached yet; suppress the overlay so the user is
+			-- not silently using the wrong item, then rely on the next
+			-- FullUpdate (after GET_ITEM_INFO_RECEIVED) to populate this.
+			overlay:SetAttribute("macrotext", nil)
+			overlay:Hide()
 		end
-		overlay:Show()
 	else
-		overlay:SetAttribute("item", nil)
+		overlay:SetAttribute("macrotext", nil)
 		overlay:Hide()
 	end
 end
@@ -200,7 +200,7 @@ function buttonProto:OnRelease()
 	self.stack = nil
 	self.dirty = false
 	if self.secureUseOverlay and not InCombatLockdown() then
-		self.secureUseOverlay:SetAttribute("item", nil)
+		self.secureUseOverlay:SetAttribute("macrotext", nil)
 		self.secureUseOverlay:Hide()
 		self.secureOverlayPending = nil
 	end
