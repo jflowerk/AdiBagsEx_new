@@ -118,16 +118,20 @@ function buttonProto:OnCreate()
 		-- Use macrotext: "/use <id>" is unambiguous and doesn't depend on item
 		-- name lookups that may not be cached yet.
 		overlay:SetAttribute("type", "macro")
-		-- Forward hover and press visuals to the underlying button so the user
-		-- still gets a tooltip and the standard click animation.
-		local underlying = self
-		overlay:SetScript("OnEnter", function()
-			local handler = underlying:GetScript("OnEnter")
-			if handler then handler(underlying) end
+		-- Show the tooltip directly via GameTooltip:SetBagItem instead of
+		-- forwarding to the underlying button's OnEnter. The underlying button
+		-- is tainted (we re-parented it), and calling its handler from our
+		-- overlay context propagates that taint into the overlay, which
+		-- silently breaks the secure click dispatch.
+		overlay:SetScript("OnEnter", function(self)
+			local btn = self:GetParent()
+			if not btn or not btn.bag or not btn.slot then return end
+			GameTooltip:SetOwner(btn, "ANCHOR_LEFT")
+			GameTooltip:SetBagItem(btn.bag, btn.slot)
+			GameTooltip:Show()
 		end)
 		overlay:SetScript("OnLeave", function()
-			local handler = underlying:GetScript("OnLeave")
-			if handler then handler(underlying) end
+			GameTooltip:Hide()
 		end)
 		overlay:Hide()
 		self.secureUseOverlay = overlay
@@ -147,9 +151,11 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	local itemId = self.itemId
-	if itemId then
-		overlay:SetAttribute("macrotext", "/use item:" .. itemId)
+	if self.hasItem and self.bag and self.slot then
+		-- "/use <bag> <slot>" targets the exact container slot, so equippable
+		-- items get equipped from this specific slot rather than picking some
+		-- other instance of the same itemID.
+		overlay:SetAttribute("macrotext", "/use " .. self.bag .. " " .. self.slot)
 		overlay:Show()
 	else
 		overlay:SetAttribute("macrotext", nil)
