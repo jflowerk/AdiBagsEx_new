@@ -155,6 +155,15 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
+	-- Vendor right-click sell goes through a code path that is NOT blocked by
+	-- the taint that blocks UseContainerItem from tainted right-clicks. Hide
+	-- the overlay while a merchant is open so the native right-click can fall
+	-- through and sell the item; the overlay re-enables on MERCHANT_CLOSED.
+	if MerchantFrame and MerchantFrame:IsShown() then
+		overlay:SetAttribute("item", nil)
+		overlay:Hide()
+		return
+	end
 	if self.hasItem and self.bag and self.slot then
 		overlay:SetAttribute("item", self.bag .. " " .. self.slot)
 		overlay:Show()
@@ -383,6 +392,10 @@ function buttonProto:_OnShow()
 	self:RegisterEvent('UNIT_QUEST_LOG_CHANGED')
 	if self.secureUseOverlay then
 		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
+		-- Toggle overlay visibility around merchant interaction so vendor
+		-- right-click sell can flow through native click.
+		self:RegisterEvent('MERCHANT_SHOW', 'UpdateSecureUseOverlay')
+		self:RegisterEvent('MERCHANT_CLOSED', 'UpdateSecureUseOverlay')
 	end
 	self:RegisterMessage('AdiBags_UpdateAllButtons', 'FullUpdate')
 	self:RegisterMessage('AdiBags_GlobalLockChanged', 'UpdateLock')
