@@ -118,6 +118,12 @@ function buttonProto:OnCreate()
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
 		overlay:EnableMouse(true)
 		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
+		-- Let left / middle / side buttons fall through to the underlying
+		-- ContainerFrameItemButton so shift-left-click chat link, drag, and
+		-- pickup keep working. Only right-click is consumed for secure use.
+		if overlay.SetPassThroughButtons then
+			overlay:SetPassThroughButtons("LeftButton", "MiddleButton", "Button4", "Button5")
+		end
 		-- type="item" with "<bag> <slot>" attribute dispatches through
 		-- UseContainerItem(bag, slot) and handles use + equip from the exact
 		-- slot the user clicked. Vendor-sell is not currently routed through
