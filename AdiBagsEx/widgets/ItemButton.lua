@@ -113,13 +113,22 @@ function buttonProto:OnCreate()
 	if addon.isRetail then
 		local overlay = CreateFrame("Button", nil, self, "SecureActionButtonTemplate")
 		overlay:SetAllPoints(self)
-		overlay:SetFrameStrata("HIGH")
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
-		overlay:EnableMouse(true)
-		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
-		-- Use macrotext rather than type="item": "/use <id>" is unambiguous and
-		-- doesn't depend on item-name lookups that may not be cached yet.
+		overlay:RegisterForClicks("RightButtonUp")
+		-- Use macrotext: "/use <id>" is unambiguous and doesn't depend on item
+		-- name lookups that may not be cached yet.
 		overlay:SetAttribute("type", "macro")
+		-- Forward hover and press visuals to the underlying button so the user
+		-- still gets a tooltip and the standard click animation.
+		local underlying = self
+		overlay:SetScript("OnEnter", function()
+			local handler = underlying:GetScript("OnEnter")
+			if handler then handler(underlying) end
+		end)
+		overlay:SetScript("OnLeave", function()
+			local handler = underlying:GetScript("OnLeave")
+			if handler then handler(underlying) end
+		end)
 		overlay:Hide()
 		self.secureUseOverlay = overlay
 	end
