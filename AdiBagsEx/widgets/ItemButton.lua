@@ -113,10 +113,13 @@ function buttonProto:OnCreate()
 	if addon.isRetail then
 		local overlay = CreateFrame("Button", nil, self, "SecureActionButtonTemplate")
 		overlay:SetAllPoints(self)
+		overlay:SetFrameStrata("HIGH")
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
-		overlay:RegisterForClicks("RightButtonUp")
-		-- Use macrotext: "/use <id>" is unambiguous and doesn't depend on item
-		-- name lookups that may not be cached yet.
+		overlay:EnableMouse(true)
+		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
+		-- Use macrotext: "/use item:<id>" is the format that worked in earlier
+		-- testing. The "bag slot" form looked cleaner but appears to silently
+		-- fail in current WoW retail.
 		overlay:SetAttribute("type", "macro")
 		-- Show the tooltip directly via GameTooltip:SetBagItem instead of
 		-- forwarding to the underlying button's OnEnter. The underlying button
@@ -151,11 +154,9 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	if self.hasItem and self.bag and self.slot then
-		-- "/use <bag> <slot>" targets the exact container slot, so equippable
-		-- items get equipped from this specific slot rather than picking some
-		-- other instance of the same itemID.
-		overlay:SetAttribute("macrotext", "/use " .. self.bag .. " " .. self.slot)
+	local itemId = self.itemId
+	if itemId then
+		overlay:SetAttribute("macrotext", "/use item:" .. itemId)
 		overlay:Show()
 	else
 		overlay:SetAttribute("macrotext", nil)
