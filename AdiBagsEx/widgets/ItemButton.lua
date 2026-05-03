@@ -156,8 +156,17 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	if self.hasItem and self.bag and self.slot then
-		overlay:SetAttribute("item", self.bag .. " " .. self.slot)
+	if self.hasItem and self.itemId then
+		-- Prefer item name (resolves through UseItemByName which honours the
+		-- vendor-sell branch). Fall back to "<bag> <slot>" if the name isn't in
+		-- the item cache yet; that path uses UseContainerItem and handles
+		-- use/equip but not vendor sell.
+		local name = self.itemLink and GetItemInfo(self.itemLink) or GetItemInfo(self.itemId)
+		if name then
+			overlay:SetAttribute("item", name)
+		else
+			overlay:SetAttribute("item", self.bag .. " " .. self.slot)
+		end
 		overlay:Show()
 	else
 		overlay:SetAttribute("item", nil)
