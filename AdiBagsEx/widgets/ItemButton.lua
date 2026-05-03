@@ -36,6 +36,7 @@ local GetItemInfo = _G.C_Item.GetItemInfo
 local GetItemQualityColor = _G.C_Item.GetItemQualityColor
 local hooksecurefunc = _G.hooksecurefunc
 local InCombatLockdown = _G.InCombatLockdown
+local IsEquippableItem = _G.IsEquippableItem or _G.C_Item and _G.C_Item.IsEquippableItem
 local IsBattlePayItem = C_Container and _G.C_Container.IsBattlePayItem or _G.IsBattlePayItem or function(...) return false end
 local IsContainerItemAnUpgrade = _G.IsContainerItemAnUpgrade
 local IsInventoryItemLocked = _G.IsInventoryItemLocked
@@ -155,16 +156,16 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	-- Vendor right-click sell goes through a code path that is NOT blocked by
-	-- the taint that blocks UseContainerItem from tainted right-clicks. Hide
-	-- the overlay while a merchant is open so the native right-click can fall
-	-- through and sell the item; the overlay re-enables on MERCHANT_CLOSED.
-	if MerchantFrame and MerchantFrame:IsShown() then
-		overlay:SetAttribute("item", nil)
-		overlay:Hide()
-		return
-	end
-	if self.hasItem and self.bag and self.slot then
+	-- Only intercept right-click for non-equippable items. Native click on
+	-- weapons/armor still works normally (equip outside vendor, sell at
+	-- vendor) - the only case 11.0.5 taint actually broke is the use of
+	-- consumables (food, potions, transmog scrolls, toys, ...). Letting
+	-- native handle equipment also makes vendor sell continue to work for
+	-- everything: consumables sell via native too because we Hide the overlay
+	-- when there is no item, so weapons / armor / junk all fall through to
+	-- the native right-click path that worked before.
+	local isEquip = self.itemId and IsEquippableItem and IsEquippableItem(self.itemId)
+	if self.hasItem and self.bag and self.slot and not isEquip then
 		overlay:SetAttribute("item", self.bag .. " " .. self.slot)
 		overlay:Show()
 	else
@@ -392,10 +393,6 @@ function buttonProto:_OnShow()
 	self:RegisterEvent('UNIT_QUEST_LOG_CHANGED')
 	if self.secureUseOverlay then
 		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
-		-- Toggle overlay visibility around merchant interaction so vendor
-		-- right-click sell can flow through native click.
-		self:RegisterEvent('MERCHANT_SHOW', 'UpdateSecureUseOverlay')
-		self:RegisterEvent('MERCHANT_CLOSED', 'UpdateSecureUseOverlay')
 	end
 	self:RegisterMessage('AdiBags_UpdateAllButtons', 'FullUpdate')
 	self:RegisterMessage('AdiBags_GlobalLockChanged', 'UpdateLock')
