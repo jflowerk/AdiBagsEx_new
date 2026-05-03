@@ -35,6 +35,7 @@ local GetContainerNumFreeSlots = C_Container and _G.C_Container.GetContainerNumF
 local GetItemInfo = _G.C_Item.GetItemInfo
 local GetItemQualityColor = _G.C_Item.GetItemQualityColor
 local hooksecurefunc = _G.hooksecurefunc
+local InCombatLockdown = _G.InCombatLockdown
 local IsBattlePayItem = C_Container and _G.C_Container.IsBattlePayItem or _G.IsBattlePayItem or function(...) return false end
 local IsContainerItemAnUpgrade = _G.IsContainerItemAnUpgrade
 local IsInventoryItemLocked = _G.IsInventoryItemLocked
@@ -103,9 +104,46 @@ function buttonProto:OnCreate()
 		self.NewItemTexture:Hide()
 	end
 	self.SplitStack = nil -- Remove the function set up by the template
-	
+
+	-- Secure right-click overlay. The underlying ContainerFrameItemButtonTemplate
+	-- OnClick path is tainted in WoW 11.0.5+ because we re-parent the button into
+	-- our own (insecure) container; that taint blocks UseContainerItem. Layering a
+	-- SecureActionButton on top routes right-click "use" through the secure
+	-- protocol. Left-click/drag still go to the underlying button.
+	if addon.isRetail then
+		local overlay = CreateFrame("Button", nil, self, "SecureActionButtonTemplate")
+		overlay:SetAllPoints(self)
+		overlay:SetFrameLevel(self:GetFrameLevel() + 5)
+		overlay:RegisterForClicks("RightButtonUp")
+		overlay:SetAttribute("type", "item")
+		overlay:Hide()
+		overlay:SetScript("OnEnter", function() return self:GetScript("OnEnter") and self:GetScript("OnEnter")(self) end)
+		overlay:SetScript("OnLeave", function() return self:GetScript("OnLeave") and self:GetScript("OnLeave")(self) end)
+		self.secureUseOverlay = overlay
+	end
+
 	-- Override drag/drop behavior for proper warband bank targeting
 	self:HookScript('OnReceiveDrag', self.OnReceiveDrag)
+end
+
+function buttonProto:UpdateSecureUseOverlay()
+	local overlay = self.secureUseOverlay
+	if not overlay then return end
+	if InCombatLockdown() then
+		-- Attributes are locked during combat. The overlay keeps its previous
+		-- attribute and will be refreshed on the next FullUpdate after combat.
+		self.secureOverlayPending = true
+		return
+	end
+	self.secureOverlayPending = nil
+	local itemId = self.itemId
+	if itemId then
+		overlay:SetAttribute("item", "item:" .. itemId)
+		overlay:Show()
+	else
+		overlay:SetAttribute("item", nil)
+		overlay:Hide()
+	end
 end
 
 function buttonProto:OnAcquire(container, bag, slot)
@@ -133,6 +171,11 @@ function buttonProto:OnRelease()
 	self.bagFamily = nil
 	self.stack = nil
 	self.dirty = false
+	if self.secureUseOverlay and not InCombatLockdown() then
+		self.secureUseOverlay:SetAttribute("item", nil)
+		self.secureUseOverlay:Hide()
+		self.secureOverlayPending = nil
+	end
 	addon:SendMessage('AdiBags_ButtonProtoRelease', self)
 end
 
@@ -320,9 +363,18 @@ function buttonProto:_OnShow()
 		self:RegisterEvent('INVENTORY_SEARCH_UPDATE', 'UpdateSearch')
 	end
 	self:RegisterEvent('UNIT_QUEST_LOG_CHANGED')
+	if self.secureUseOverlay then
+		self:RegisterEvent('PLAYER_REGEN_ENABLED', 'OnLeaveCombat')
+	end
 	self:RegisterMessage('AdiBags_UpdateAllButtons', 'FullUpdate')
 	self:RegisterMessage('AdiBags_GlobalLockChanged', 'UpdateLock')
 	self:Update()
+end
+
+function buttonProto:OnLeaveCombat()
+	if self.secureOverlayPending then
+		self:UpdateSecureUseOverlay()
+	end
 end
 
 function buttonProto:_OnHide()
@@ -380,6 +432,7 @@ function buttonProto:FullUpdate()
 		self.bagFamily = select(2, GetContainerNumFreeSlots(bag))
 	end
 
+	self:UpdateSecureUseOverlay()
 	self:Update()
 end
 
