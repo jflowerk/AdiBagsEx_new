@@ -117,10 +117,12 @@ function buttonProto:OnCreate()
 		overlay:SetFrameLevel(self:GetFrameLevel() + 10)
 		overlay:EnableMouse(true)
 		overlay:RegisterForClicks("RightButtonUp", "RightButtonDown")
-		-- Use macrotext: "/use item:<id>" is the format that worked in earlier
-		-- testing. The "bag slot" form looked cleaner but appears to silently
-		-- fail in current WoW retail.
-		overlay:SetAttribute("type", "macro")
+		-- type="item" with "<bag> <slot>" attribute dispatches via the secure
+		-- equivalent of UseContainerItem(bag, slot), which mirrors a native
+		-- right-click: use for consumables, equip for gear, sell at a vendor.
+		-- The macrotext "/use item:<id>" path only ever does "use" and doesn't
+		-- branch into equip/sell, which is why equippable/vendor cases failed.
+		overlay:SetAttribute("type", "item")
 		-- Show the tooltip directly via GameTooltip:SetBagItem instead of
 		-- forwarding to the underlying button's OnEnter. The underlying button
 		-- is tainted (we re-parented it), and calling its handler from our
@@ -154,12 +156,11 @@ function buttonProto:UpdateSecureUseOverlay()
 		return
 	end
 	self.secureOverlayPending = nil
-	local itemId = self.itemId
-	if itemId then
-		overlay:SetAttribute("macrotext", "/use item:" .. itemId)
+	if self.hasItem and self.bag and self.slot then
+		overlay:SetAttribute("item", self.bag .. " " .. self.slot)
 		overlay:Show()
 	else
-		overlay:SetAttribute("macrotext", nil)
+		overlay:SetAttribute("item", nil)
 		overlay:Hide()
 	end
 end
@@ -190,7 +191,7 @@ function buttonProto:OnRelease()
 	self.stack = nil
 	self.dirty = false
 	if self.secureUseOverlay and not InCombatLockdown() then
-		self.secureUseOverlay:SetAttribute("macrotext", nil)
+		self.secureUseOverlay:SetAttribute("item", nil)
 		self.secureUseOverlay:Hide()
 		self.secureOverlayPending = nil
 	end
